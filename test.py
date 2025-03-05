@@ -1,6 +1,7 @@
 import numpy as np
 
 global betas
+
 # global exp_sum_nominators
 # global exp_sum_d
 
@@ -12,11 +13,14 @@ def p(x, beta):
     return np.exp(beta @ x) / (1 + exp_sum)
 
 def weight(p_x):
+    # p_x needs x_i and beta
     return p_x * (1 - p_x)
 
-def z(y, x_b, p_x, w_x):
+# compute_z
+def compute_z(y, x_b, p_x, w_x):
     # y == indicator
-    return x_b + (y - p_x) / w_x
+    z = x_b + (y - p_x) / w_x
+    return z
 
 def soft_thresholding(x, gamma):
     # gamma > 0
@@ -29,19 +33,20 @@ def soft_thresholding(x, gamma):
 def dummy_update(X, y, j, beta, alpha, l):
     x_j = X[:, j]
     # x_j - jth column
-    n = len(x_j)
+    n = len(x_j) # no. of observations
     sum = 0
     weights_vector = []
     for i in range(n):
-        w_x = weight(x_j[i])
+        x_b = X[i] @ beta
+        prob_x = p(X[i], beta)
+        w_x = weight(prob_x)
         weights_vector.append(w_x)
         x_ij = x_j[i]
 
-        x_b = product(X[i, :], beta)
-        p_x = p(x_b, beta)
-        z_i = z(y[i], x_b, p_x, w_x)
+        z_i = compute_z(y[i], x_b, prob_x, w_x)
 
-        sum += w_x * x_ij * (z_i - p_x + x_ij * beta[j])
+        # sum += w_x * x_ij * (z_i - p_x + x_ij * beta[j])
+        sum += w_x * x_ij * (z_i - x_b)
 
     st = soft_thresholding(sum, alpha * l)
     denominator = np.array(weights_vector) @ (x_j ** 2) + l * (1 - alpha)
@@ -101,7 +106,47 @@ def predict_proba(X_test):
     for i in range(len(X_test)):
         # count exp_sum once
         for k in range(len(betas)):
-            probas[i, k] = p(X_test[i] @ betas[k])
+            probas[i, k] = p(X_test[i], betas[k])
     # fill the reference level
-    probas[:, -1] = 1 - np.sum(probas[:, -1], axis=0)
+    probas[:, -1] = 1 - np.sum(probas[:, :-1], axis=1)
     return probas
+
+def predict(X_test):
+    probas = predict_proba(X_test)
+    return np.argmax(probas, axis=1)
+
+#%%
+
+n_features = 2
+n_classes = 2
+
+betas = [np.random.rand(n_features) for _ in range(n_classes - 1)]
+
+def shuffle(X, y):
+    indices = np.arange(len(y))
+    np.random.shuffle(indices)
+    return X[indices], y[indices]
+
+def generate_scheme_1(n, p, a):
+    y = np.random.randint(0, 2, n)
+    n_0 = len(y[y == 0])
+    X_0 = np.random.normal(loc=0, scale=1, size=(n_0, p))
+    X_1 = np.random.normal(loc=a, scale=1, size=(n - n_0, p))
+    X = np.concatenate((X_0, X_1))
+    y = np.concatenate((y[y == 0], y[y == 1]))
+    X, y = shuffle(X, y)
+    return X, y
+
+X, y = generate_scheme_1(100, 2, 5)
+
+train(1000, X, y, 0.5, 0.5)
+
+y_pred = predict(X)
+
+import matplotlib.pyplot as plt
+
+plt.scatter(X[:, 0][y_pred == 0], X[:, 1][y_pred == 0])
+plt.scatter(X[:, 0][y_pred == 1], X[:, 1][y_pred == 1])
+plt.show()
+
+
