@@ -1,6 +1,7 @@
 import numpy as np
 from binary_case import LogRegCCD
 import matplotlib.pyplot as plt
+from sklearn.metrics import accuracy_score
 
 
 def shuffle(X, y):
@@ -23,13 +24,33 @@ def generate_scheme_1(n, p, a):
 n = 100
 n_features = 2
 n_classes = 2
+alpha = 0.9
 
 X, y = generate_scheme_1(n, n_features, 5)
 
 lr = LogRegCCD()
-lr.fit(1000, X, y, 0.9, 0.9)
-lr.beta
+lr.fit(10, X, y, alpha, 0.9)
+print(lr.beta)
 y_pred = lr.predict(X)
+
+accuracy = accuracy_score(y, y_pred)
+print(accuracy)
+
+plt.scatter(X[:, 0][y_pred == 0], X[:, 1][y_pred == 0])
+plt.scatter(X[:, 0][y_pred == 1], X[:, 1][y_pred == 1])
+plt.show()
+
+#%% highest lambda value
+
+lr = LogRegCCD()
+# computing lambda max -> beta = 0
+lambda_max = lr.compute_lambda_max(X, y, alpha)
+lr.fit(1000, X, y, alpha, lambda_max)
+print(lr.beta)
+y_pred = lr.predict(X)
+
+accuracy = accuracy_score(y, y_pred)
+print(accuracy)
 
 plt.scatter(X[:, 0][y_pred == 0], X[:, 1][y_pred == 0])
 plt.scatter(X[:, 0][y_pred == 1], X[:, 1][y_pred == 1])
