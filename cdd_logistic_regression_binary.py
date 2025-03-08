@@ -2,23 +2,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def sigmoid(x):
-    # Computes the sigmoid function for input x
+    # computes the sigmoid function for input x
     return 1 / (1 + np.exp(-x))
 
 def p(x, beta):
-    # Computes the probability of the class being 1 given input x and model parameters beta
+    # computes the probability of the class being 1 given input x and model parameters beta -> y_hat
     return sigmoid(x @ beta)
 
-def weight(p_x):
-    # Computes the weight for a given probability p_x using the formula p_x * (1 - p_x)
-    return p_x * (1 - p_x)
+def weight(y_hat):
+    # second derivative of the log-likelihood function
+    return y_hat * (1 - y_hat)
 
-def compute_z(y_i, x_b, p_x, w_x):
-    # Computes the z value used in the update of the coefficients during the coordinate descent
-    return x_b + (y_i - p_x) / w_x
+def compute_z(y_i, x_b, y_hat, w_x):
+    # shifts raw log-odds by a scaled version of the residual
+    return x_b + (y_i - y_hat) / w_x
 
 def soft_thresholding(x, gamma):
-    # Applies soft thresholding to the value x with threshold gamma, 
+    # applies soft thresholding to the value x with threshold gamma, 
     # reducing |x| > gamma, or making them 0 otherwise
     if x > gamma:
         return x - gamma
@@ -27,23 +27,55 @@ def soft_thresholding(x, gamma):
     return 0
 
 def dummy_update(X, y, j, beta, alpha, l):
-    # Updates the j-th coefficient beta[j] based on the coordinate descent algorithm
-    # l - regularisation strength
-    x_j = X[:, j]
-    n = len(x_j)
-    sum_val = 0
-    weights_vector = []
+    # Updates the j-th coefficient beta[j] using the coordinate descent algorithm
+
+    x_j = X[:, j]  
+    n = len(X)  
+    sum_val = 0  # Stores the accumulated gradient sum for beta[j]
+    weights_vector = []  # Stores the computed weights for each data point
+
+    # --- USING z_i ---
+
     for i in range(n):
-        x_b = X[i] @ beta
-        prob_x = p(X[i], beta)
-        w_x = weight(prob_x)
-        weights_vector.append(w_x) # holds the weights corresponding to each data point, calculated based on the probability of the data point belonging to class 1 (p_x).
-        z_i = compute_z(y[i], x_b, prob_x, w_x) # weighted residual between the actual label y_i and the predicted probability p_x
-        sum_val += w_x * x_j[i] * (z_i - x_b) # accumulates the weighted gradient contributions from all data points
+        x_b = X[i] @ beta # raw log-odds
+        y_hat = p(X[i], beta)  # predicted probability of class 1
+        w_x = weight(y_hat)  # second derivative of the log-likelihood function
+        weights_vector.append(w_x)  
+        
+        z_i = compute_z(y[i], x_b, y_hat, w_x) # shifts raw log-odds by a scaled version of the residual
+        
+        # Compute the partial residual, adjusting for beta[j] contribution
+        partial_residual_i = z_i - (x_b - beta[j] * x_j[i])
+        
+        # Accumulate weighted gradient contribution
+        sum_val += w_x * x_j[i] * partial_residual_i  
+
+    # --- NOT USING z_i ---
     
-    soft_thresh = soft_thresholding(sum_val, alpha * l) # enforcing Lasso regularization by pushing small coefficients toward zero
-    denominator = np.array(weights_vector) @ (x_j ** 2) + l * (1 - alpha) # alpha = 1 -> only lasso; sum of squared feature values, weighted by the inverse of the coefficients
+    # for i in range(n):
+    #     # Loop through each data point to compute weights and the gradient sum
+    #     p_x = p(X[i], beta)  # Compute the predicted probability of class 1
+    #     w_x = weight(p_x)  # Compute the weight based on the probability
+    #     weights_vector.append(w_x)  # Store the weight.
+        
+    #     # Compute the partial residual: difference between actual label and predicted probability,
+    #     # adjusted for the influence of the current beta[j]
+    #     partial_residual_i = y[i] - p_x + beta[j] * x_j[i]
+        
+    #     # Accumulate the weighted gradient contribution for the coefficient update
+    #     sum_val += w_x * x_j[i] * partial_residual_i  
+
+    # Apply soft-thresholding to enforce L1 (Lasso) regularization
+    soft_thresh = soft_thresholding(sum_val, alpha * l)
+
+    # Compute the denominator for the update:
+    # - The sum of squared feature values weighted by the computed weights.
+    # - L2 (Ridge) penalty term scaled by (1 - alpha), which disappears when alpha = 1 (pure Lasso).
+    denominator = np.array(weights_vector) @ (x_j ** 2) + l * (1 - alpha)  
+
+    # Return the updated coefficient value.
     return soft_thresh / denominator
+
 
 def coordinate_descent(X, y, alpha, l, beta):
     # Performs coordinate descent optimization on the model parameters beta
