@@ -45,6 +45,7 @@ def dummy_update(X, y, j, beta, alpha, l):
 
         z_i = compute_z(y[i], x_b, prob_x, w_x)
 
+        # x_b <- x_b_i
         # sum += w_x * x_ij * (z_i - p_x + x_ij * beta[j])
         sum += w_x * x_ij * (z_i - x_b)
 
