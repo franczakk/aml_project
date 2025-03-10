@@ -55,3 +55,15 @@ print(accuracy)
 plt.scatter(X[:, 0][y_pred == 0], X[:, 1][y_pred == 0])
 plt.scatter(X[:, 0][y_pred == 1], X[:, 1][y_pred == 1])
 plt.show()
+
+#%%
+
+alpha = 0.9
+lr = LogRegCCD()
+lr.plot(LogRegCCD.F1, X, y, X, y, 0.9)
+
+#%%
+
+alpha = 0.9
+lr = LogRegCCD()
+lr.plot_coefficients(X, y, alpha)
