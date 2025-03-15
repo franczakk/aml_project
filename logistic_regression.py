@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
 from sklearn.metrics import recall_score, precision_score, f1_score, balanced_accuracy_score, roc_auc_score, average_precision_score
 
 
@@ -15,6 +16,8 @@ class LogRegCCD:
         self.mean = None
         self.std = None
         self.beta = None
+        self._active_coordinates_set = None
+        self._eliminated_coordinates_set = None
 
     def _prob(self, x):
         """
@@ -112,8 +115,15 @@ class LogRegCCD:
         :param lmbda: regularization penalty parameter
         :return: None
         """
-        for j in range(len(self.beta)):
-            self.beta[j] = self._update(X, y, j, alpha, lmbda)
+
+        for j in self._active_coordinates_set:
+            new_value = self._update(X, y, j, alpha, lmbda)
+            self.beta[j] = new_value
+            if new_value == 0:
+                # saving inactive coordinates
+                self._eliminated_coordinates_set.add(j)
+        # updating active coordinates
+        self._active_coordinates_set = self._active_coordinates_set - self._eliminated_coordinates_set
 
     def compute_lambda_max(self, X, y, alpha, center=True):
         """
@@ -121,6 +131,7 @@ class LogRegCCD:
         :param X: training data matrix
         :param y: vector of indicators of class 1
         :param alpha: elastic net parameter
+        :param center: apply centering to X_train
         :return: maximum value of lambda
         """
         if alpha == 0:
@@ -150,15 +161,21 @@ class LogRegCCD:
             raise ValueError("alpha must be in [0, 1] interval")
         if lmbda < 0:
             raise ValueError("lmbda cannot be less than 0")
-        # TODO iterate only over active coordinates
-        # TODO add covariance updates
+
+        X_train, y_train = self._to_numpy(X_train, y_train)
+
         # normalize data, add intercept, prepare beta
         X_train = self._initialize(X_train, center)
+
+        # initialize active coordinates
+        self._active_coordinates_set = set(range(X_train.shape[1]))
+        self._eliminated_coordinates_set = set()
+
         for i in range(iterations):
             beta_old = self.beta.copy()
             self._coordinate_descent(X_train, y_train, alpha, lmbda)
             # stop condition
-            if np.linalg.norm(self.beta - beta_old) < beta_eps:
+            if np.linalg.norm(beta_old) != 0 and np.linalg.norm(self.beta - beta_old) / np.linalg.norm(beta_old) < beta_eps:
                 break
         # rescaling betas to the original data
         if adjust_beta:
@@ -172,6 +189,9 @@ class LogRegCCD:
         :param measure: evaluation measure
         :return: evaluation value
         """
+
+        X_valid, y_valid = self._to_numpy(X_valid, y_valid)
+
         y_prob = self.predict_proba(X_valid)
         y_pred = self.predict(X_valid)
         if measure == LogRegCCD.RECALL:
@@ -203,6 +223,10 @@ class LogRegCCD:
         :param beta_eps: stop condition parameter
         :return: None
         """
+
+        X_train, y_train = self._to_numpy(X_train, y_train)
+        X_valid, y_valid = self._to_numpy(X_valid, y_valid)
+
         # computing lambda max
         lambda_max = self.compute_lambda_max(X_train, y_train, alpha, center)
         lambda_min = lambda_max * eps
@@ -236,6 +260,9 @@ class LogRegCCD:
         :param beta_eps: stop condition parameter
         :return: None
         """
+
+        X_train, y_train = self._to_numpy(X_train, y_train)
+
         # computing lambda max
         lambda_max = self.compute_lambda_max(X_train, y_train, alpha, center)
         lambda_min = lambda_max * eps
@@ -289,6 +316,20 @@ class LogRegCCD:
         """
         self.beta = np.zeros(n_features)
 
+    @staticmethod
+    def _to_numpy(X, y=None):
+        """
+        casts data to numpy arrays
+        :param X: input matrix
+        :param y: input vector
+        :return: tuple of numpy arrays
+        """
+        if isinstance(X, pd.DataFrame) or isinstance(X, pd.Series):
+            X = X.to_numpy()
+        if isinstance(y, pd.DataFrame) or isinstance(y, pd.Series):
+            y = y.to_numpy()
+        return X, y
+
     def _initialize(self, X, center=True):
         """
         prepares data for processing, applies standardizing and adds intercept, initializes beta parameter
@@ -296,6 +337,7 @@ class LogRegCCD:
         :param center: apply centering to X_train (do not apply for sparse data)
         :return: preprocessed data
         """
+
         X = self._standardize_matrix(X, center)
         X = self._add_intercept(X)
         n_features = X.shape[1]
@@ -327,6 +369,9 @@ class LogRegCCD:
         :param X_test: test data matrix
         :return: vector of predicted probabilities
         """
+
+        X_test, _ = self._to_numpy(X_test)
+
         X_test = self._add_intercept(X_test)
         n = len(X_test)
         probas = np.zeros(n)

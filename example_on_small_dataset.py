@@ -1,5 +1,5 @@
 import numpy as np
-from binary_case import LogRegCCD
+from logistic_regression import LogRegCCD
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score
 
