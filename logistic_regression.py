@@ -92,7 +92,7 @@ class LogRegCCD:
 
             x_ij = x_j[i]
 
-            if w_x == 0:
+            if abs(w_x) < 1e-10:
                 total += x_ij * (y[i] - prob_x)
                 continue
 
